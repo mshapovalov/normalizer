@@ -4,13 +4,17 @@ declare(strict_types=1);
 namespace Mshapovalov\Normalizer\Tests;
 
 use DateTime;
+use Mshapovalov\Normalizer\Exception\NoMetaDataForDeNormalizationException;
 use Mshapovalov\Normalizer\Exception\ThereAreDuplicatedAliasesException;
 use Mshapovalov\Normalizer\Exception\ThereAreDuplicatedTypesException;
+use Mshapovalov\Normalizer\Exception\ThereIsNoConfigurationForAliasException;
+use Mshapovalov\Normalizer\Exception\ThereIsNoConfigurationForTypeException;
 use Mshapovalov\Normalizer\Normalizer;
 use Mshapovalov\Normalizer\NormalizerFactory;
 use Mshapovalov\Normalizer\NormalizerObserverInterface;
 use Mshapovalov\Normalizer\Tests\Stub\Car;
 use Mshapovalov\Normalizer\Tests\Stub\Engine;
+use Mshapovalov\Normalizer\Tests\Stub\Passenger;
 use Mshapovalov\Normalizer\Tests\Stub\TechnicalInspection;
 use Mshapovalov\Normalizer\TypeConfiguration;
 use PHPUnit\Framework\TestCase;
@@ -36,7 +40,7 @@ class NormalizerTest extends TestCase
     public function testItDoesNotCreateWithDuplicatedTypes(): void
     {
         $this->expectException(ThereAreDuplicatedTypesException::class);
-        $this->expectExceptionMessage('There are duplicated types "Stub\Car, Stub\Engine"!');
+        $this->expectExceptionMessage('There are duplicated types "Mshapovalov\Normalizer\Tests\Stub\Car, Mshapovalov\Normalizer\Tests\Stub\Engine"!');
         $this->factory->createNormalizer([
             new TypeConfiguration('car', Car::class),
             new TypeConfiguration('car2', Car::class),
@@ -77,6 +81,7 @@ class NormalizerTest extends TestCase
                 new TypeConfiguration('car', Car::class),
                 new TypeConfiguration('engine', Engine::class),
                 new TypeConfiguration('technicalInspection', TechnicalInspection::class),
+                new TypeConfiguration('passenger', Passenger::class),
                 new TypeConfiguration(
                     'date',
                     \DateTime::class,
@@ -97,6 +102,8 @@ class NormalizerTest extends TestCase
         $technicalInspection = new TechnicalInspection(new \DateTime('2001-01-01 12:00:00'));
         $technicalInspection->addNote('Ok');
         $car->addTechnicalInspection($technicalInspection);
+        $car->addPassenger('front', new Passenger('Mike'));
+        $car->addPassenger('rear', new Passenger('Joe'));
 
         $normalized = $normalizer->normalize($car);
 
@@ -107,8 +114,11 @@ class NormalizerTest extends TestCase
                     [
                         'type' => 'gasoline',
                         'volume' => 2.5,
-                        '__type_alias__' => 'engine',
-                        '__data_structure_version__' => 0,
+                        '__normalizer__' =>
+                            [
+                                'alias' => 'engine',
+                                'version' => 0,
+                            ],
                     ],
                 'technicalInspections' =>
                     [
@@ -117,39 +127,92 @@ class NormalizerTest extends TestCase
                                 'date' =>
                                     [
                                         'value' => '2001:01:01 12:00:00',
-                                        '__type_alias__' => 'date',
-                                        '__data_structure_version__' => 0,
+                                        '__normalizer__' =>
+                                            [
+                                                'alias' => 'date',
+                                                'version' => 0,
+                                            ],
                                     ],
                                 'notes' =>
                                     [
                                         0 => 'Ok',
                                     ],
-                                '__type_alias__' => 'technicalInspection',
-                                '__data_structure_version__' => 0,
+                                '__normalizer__' =>
+                                    [
+                                        'alias' => 'technicalInspection',
+                                        'version' => 0,
+                                    ],
                             ],
                     ],
-                '__type_alias__' => 'car',
-                '__data_structure_version__' => 0,
+                'passengers' =>
+                    [
+                        'front' =>
+                            [
+                                'name' => 'Mike',
+                                '__normalizer__' =>
+                                    [
+                                        'alias' => 'passenger',
+                                        'version' => 0,
+                                    ],
+                            ],
+                        'rear' =>
+                            [
+                                'name' => 'Joe',
+                                '__normalizer__' =>
+                                    [
+                                        'alias' => 'passenger',
+                                        'version' => 0,
+                                    ],
+                            ],
+                    ],
+                '__normalizer__' =>
+                    [
+                        'alias' => 'car',
+                        'version' => 0,
+                    ],
             ],
             $normalized
         );
         $denormalized = $normalizer->denormalize($normalized);
         self::assertEquals($car, $denormalized);
         self::assertTrue($observer->wasObserved());
+
+        $car = new Car('Skoda');
+        $normalized = $normalizer->normalize($car);
+        self::assertEquals(
+            [
+                'model' => 'Skoda',
+                'engine' => null,
+                'technicalInspections' =>
+                    [
+                    ],
+                'passengers' =>
+                    [
+                    ],
+                '__normalizer__' =>
+                    [
+                        'alias' => 'car',
+                        'version' => 0,
+                    ],
+            ],
+            $normalized
+        );
+        self::assertEquals($car, $normalizer->denormalize($normalized));
     }
 
-    public function testItConvertsData():void{
+    public function testItConvertsData(): void
+    {
         $normalizer = $this->factory->createNormalizer([
             new TypeConfiguration(
                 'engine',
                 Engine::class,
                 [
-                    function (array $data){
+                    function (array $data) {
                         $data['legacy_volume_1'] = $data['legacy_volume_0'];
                         unset($data['legacy_volume_0']);
                         return $data;
                     },
-                    function (array $data){
+                    function (array $data) {
                         $data['volume'] = $data['legacy_volume_1'];
                         unset($data['legacy_volume_1']);
                         return $data;
@@ -163,8 +226,10 @@ class NormalizerTest extends TestCase
             [
                 'type' => 'diesel',
                 'legacy_volume_0' => 5,
-                '__type_alias__' => 'engine',
-                '__data_structure_version__' => 0,
+                '__normalizer__' => [
+                    'alias' => 'engine',
+                    'version' => 0
+                ]
             ]
         );
         self::assertEquals($expectedDenormalized, $actualDenormalized);
@@ -173,10 +238,64 @@ class NormalizerTest extends TestCase
             [
                 'type' => 'diesel',
                 'legacy_volume_1' => 5,
-                '__type_alias__' => 'engine',
-                '__data_structure_version__' => 1,
+                '__normalizer__' => [
+                    'alias' => 'engine',
+                    'version' => 1
+                ]
             ]
         );
         self::assertEquals($expectedDenormalized, $actualDenormalized);
+    }
+
+    public function testItFailsIfThereIsNoMetadata(): void
+    {
+        $this->expectException(NoMetaDataForDeNormalizationException::class);
+        $this->expectExceptionMessage('There is no meta data for denormalization in {"name":"Mike"}!');
+        $normalizer = $this->factory->createNormalizer([
+            new TypeConfiguration(
+                'passenger',
+                Passenger::class
+            )
+        ]);
+
+        $normalizer->denormalize([
+            'name' => 'Mike'
+        ]);
+    }
+
+    public function testIfFailsIfThereIsNoConfigurationForType(): void
+    {
+        $normalizer = $this->factory->createNormalizer([
+            new TypeConfiguration(
+                'passenger',
+                Passenger::class
+            )
+        ]);
+
+        $this->expectException(ThereIsNoConfigurationForTypeException::class);
+        $this->expectExceptionMessage('There is no normalizer configuration for type "Mshapovalov\Normalizer\Tests\Stub\Engine"!');
+        $normalizer->normalize(new Engine('gasoline', 1.2));
+    }
+
+    public function testItFailsIfThereNoConfigurationForAlias(): void
+    {
+        $normalizer = $this->factory->createNormalizer([
+            new TypeConfiguration(
+                'passenger',
+                Passenger::class
+            )
+        ]);
+
+        $this->expectException(ThereIsNoConfigurationForAliasException::class);
+        $this->expectExceptionMessage('There is no normalizer configuration for alias "engine"!');
+
+        $normalizer->denormalize([
+            'type' => 'gasoline',
+            'value' => 1.2,
+            '__normalizer__' => [
+                'alias' => 'engine',
+                'version' => 0
+            ]
+        ]);
     }
 }

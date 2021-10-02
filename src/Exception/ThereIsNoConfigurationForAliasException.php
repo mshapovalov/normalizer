@@ -8,6 +8,6 @@ class ThereIsNoConfigurationForAliasException extends \RuntimeException
 {
     public function __construct(string $alias)
     {
-        parent::__construct(sprintf('There is no configuration for alias "%s"', $alias));
+        parent::__construct(sprintf('There is no normalizer configuration for alias "%s"!', $alias));
     }
 }

@@ -8,14 +8,16 @@ class Car
 {
     private string $model;
 
-    private Engine $engine;
+    private ?Engine $engine;
 
     /** @var TechnicalInspection[] */
     private array $technicalInspections = [];
 
+    private array $passengers = [];
+
     /**
      */
-    public function __construct(string $model, Engine $engine)
+    public function __construct(string $model, ?Engine $engine = null)
     {
         $this->model = $model;
         $this->engine = $engine;
@@ -26,18 +28,7 @@ class Car
         $this->technicalInspections[] = $technicalInspection;
     }
 
-    public function getModel(): string
-    {
-        return $this->model;
-    }
-
-    public function getEngine(): Engine
-    {
-        return $this->engine;
-    }
-
-    public function getTechnicalInspections(): array
-    {
-        return $this->technicalInspections;
+    public function addPassenger(string $seat, Passenger $passenger): void{
+        $this->passengers[$seat] = $passenger;
     }
 }

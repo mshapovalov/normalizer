@@ -6,7 +6,6 @@ namespace Mshapovalov\Normalizer;
 
 use Mshapovalov\Normalizer\Exception\CustomDeNormalizerNotExistException;
 use Mshapovalov\Normalizer\Exception\CustomNormalizerNotExistException;
-use phpDocumentor\Reflection\Types\Boolean;
 
 class TypeConfiguration
 {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Mshapovalov\Normalizer;
 
 
+use Mshapovalov\Normalizer\Exception\NoMetaDataForDeNormalizationException;
 use Mshapovalov\Normalizer\Exception\ThereAreDuplicatedAliasesException;
 use Mshapovalov\Normalizer\Exception\ThereAreDuplicatedTypesException;
 use Mshapovalov\Normalizer\Exception\ThereIsNoConfigurationForAliasException;
@@ -11,8 +12,9 @@ use Mshapovalov\Normalizer\Exception\ThereIsNoConfigurationForTypeException;
 
 class Normalizer implements NormalizerInterface
 {
-    private const TYPE_ALIAS_PROPERTY_NAME = '__type_alias__';
-    private const VERSION_PROPERTY_NAME = '__data_structure_version__';
+    private const ALIAS_PROPERTY_NAME = 'alias';
+    private const VERSION_PROPERTY_NAME = 'version';
+    private const NORMALIZER_PROPERTY_NAME = '__normalizer__';
 
     /** @var TypeConfiguration[] */
     private array $typesConfigurations;
@@ -34,8 +36,8 @@ class Normalizer implements NormalizerInterface
 
     public function denormalize(array $data): object
     {
-        if ($this->isAssociative($data) && false === array_key_exists(self::TYPE_ALIAS_PROPERTY_NAME, $data)) {
-            throw new \Exception('Type is not defined');
+        if ($this->isAssociative($data) && false === array_key_exists(self::NORMALIZER_PROPERTY_NAME, $data)) {
+            throw new NoMetaDataForDeNormalizationException($data);
         }
         return $this->denormalizeValue($data);
     }
@@ -93,8 +95,10 @@ class Normalizer implements NormalizerInterface
                 $result[$property->getName()] = $this->normalizeValue($this->getPropertyValue($property, $object));
             }
         }
-        $result[self::TYPE_ALIAS_PROPERTY_NAME] = $configuration->getAlias();
-        $result[self::VERSION_PROPERTY_NAME] = $configuration->getDataStructureVersion();
+        $result[self::NORMALIZER_PROPERTY_NAME] = [
+            self::ALIAS_PROPERTY_NAME => $configuration->getAlias(),
+            self::VERSION_PROPERTY_NAME => $configuration->getDataStructureVersion()
+        ];
         return $result;
     }
 
@@ -103,8 +107,8 @@ class Normalizer implements NormalizerInterface
      */
     private function denormalizeValue($value)
     {
-        if (is_array($value) && array_key_exists(self::TYPE_ALIAS_PROPERTY_NAME, $value)) {
-            return $this->denormalizeObject($value, $value[self::TYPE_ALIAS_PROPERTY_NAME]);
+        if (is_array($value) && array_key_exists(self::NORMALIZER_PROPERTY_NAME, $value)) {
+            return $this->denormalizeObject($value);
         }
         if (is_array($value)) {
             foreach ($value as $k => $v) {
@@ -115,10 +119,12 @@ class Normalizer implements NormalizerInterface
         return $value;
     }
 
-    private function denormalizeObject(array $data, string $alias): object
+    private function denormalizeObject(array $data): object
     {
+        $dataStructureVersion = (int)$data[self::NORMALIZER_PROPERTY_NAME][self::VERSION_PROPERTY_NAME];
+        $alias = $data[self::NORMALIZER_PROPERTY_NAME][self::ALIAS_PROPERTY_NAME];
         $configuration = $this->getConfigurationByAlias($alias);
-        $dataStructureVersion = (int)$data[self::VERSION_PROPERTY_NAME];
+
         for ($i = $dataStructureVersion; $i < $configuration->getDataStructureVersion(); $i++) {
             $data = $configuration->convert($i, $data);
         }
@@ -175,9 +181,6 @@ class Normalizer implements NormalizerInterface
 
     private function isAssociative(array $array): bool
     {
-        if ([] === $array) {
-            return false;
-        }
         return array_keys($array) !== range(0, count($array) - 1);
     }
 }
