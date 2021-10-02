@@ -1,0 +1,29 @@
+{
+    "name": "mshapovalov/normalizer",
+    "description": "Object to array normalizer",
+    "type": "library",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Mshapovalov\\Normalizer\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Mshapovalov\\Normalizer\\Tests\\": "tests/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Mike Shapovalov",
+            "email": "smike.mbx@gmail.com"
+        }
+    ],
+    "require": {
+        "php": ">=7.4"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.5",
+        "mockery/mockery": "^1.4"
+    }
+}
