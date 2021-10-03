@@ -7,11 +7,13 @@ use DateTime;
 use Mshapovalov\Normalizer\Exception\NoMetaDataForDeNormalizationException;
 use Mshapovalov\Normalizer\Exception\ThereAreDuplicatedAliasesException;
 use Mshapovalov\Normalizer\Exception\ThereAreDuplicatedTypesException;
+use Mshapovalov\Normalizer\Exception\ThereIsMoreChangesThanConvertorsException;
 use Mshapovalov\Normalizer\Exception\ThereIsNoConfigurationForAliasException;
 use Mshapovalov\Normalizer\Exception\ThereIsNoConfigurationForTypeException;
 use Mshapovalov\Normalizer\Normalizer;
 use Mshapovalov\Normalizer\NormalizerFactory;
 use Mshapovalov\Normalizer\NormalizerObserverInterface;
+use Mshapovalov\Normalizer\Tests\Mock\InMemoryChangesStorage;
 use Mshapovalov\Normalizer\Tests\Stub\Car;
 use Mshapovalov\Normalizer\Tests\Stub\Engine;
 use Mshapovalov\Normalizer\Tests\Stub\Passenger;
@@ -23,10 +25,13 @@ class NormalizerTest extends TestCase
 {
     private NormalizerFactory $factory;
 
+    private InMemoryChangesStorage $changesStorage;
+
     protected function setUp(): void
     {
         parent::setUp();
-        $this->factory = new NormalizerFactory();
+        $this->changesStorage = new InMemoryChangesStorage();
+        $this->factory = new NormalizerFactory($this->changesStorage);
     }
 
     public function testItCreates(): void
@@ -297,5 +302,87 @@ class NormalizerTest extends TestCase
                 'version' => 0
             ]
         ]);
+    }
+
+    public function testItTracksChanges(): void
+    {
+        $normalizer = $this->factory->createNormalizer(
+            [
+                new TypeConfiguration(
+                    'car',
+                    Car::class,
+                ),
+            ],
+            [],
+            true
+        );
+        $normalizer->normalize(new Car('BMW'));
+        $normalizer->normalize(new Car('BMW'));
+        self::assertEquals(
+            [
+                'car' =>
+                    [
+                        0 =>
+                            [
+                                0 =>
+                                    [
+                                        'name' => 'model',
+                                        'type' => 'string',
+                                        'nullable' => false,
+                                    ],
+                                1 =>
+                                    [
+                                        'name' => 'engine',
+                                        'type' => 'object',
+                                        'nullable' => true,
+                                    ],
+                                2 =>
+                                    [
+                                        'name' => 'technicalInspections',
+                                        'type' => 'array',
+                                        'nullable' => false,
+                                    ],
+                                3 =>
+                                    [
+                                        'name' => 'passengers',
+                                        'type' => 'array',
+                                        'nullable' => false,
+                                    ],
+                            ],
+                    ],
+            ],
+            $this->changesStorage->getChanges()
+        );
+    }
+
+    public function testItDoesNotNormalizeIfVersionIsWrong()
+    {
+
+        $normalizer = $this->factory->createNormalizer(
+            [
+                new TypeConfiguration(
+                    'car',
+                    Car::class,
+                ),
+            ],
+            [],
+            true
+        );
+        $normalizer->normalize(new Car('BMW'));
+
+        $normalizer = $this->factory->createNormalizer(
+            [
+                new TypeConfiguration(
+                    'car',
+                    Engine::class,
+                ),
+            ],
+            [],
+            true
+        );
+        $this->expectException(ThereIsMoreChangesThanConvertorsException::class);
+        $this->expectExceptionMessage('There is more changes than data structure convertors for type "Mshapovalov\Normalizer\Tests\Stub\Engine"!');
+
+        $normalizer->normalize(new Engine('electric', 2000));
     }
 }

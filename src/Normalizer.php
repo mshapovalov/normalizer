@@ -4,9 +4,11 @@ declare(strict_types=1);
 namespace Mshapovalov\Normalizer;
 
 
+use Mshapovalov\Normalizer\ChangesTracker\ObjectStructureChangesTracker;
 use Mshapovalov\Normalizer\Exception\NoMetaDataForDeNormalizationException;
 use Mshapovalov\Normalizer\Exception\ThereAreDuplicatedAliasesException;
 use Mshapovalov\Normalizer\Exception\ThereAreDuplicatedTypesException;
+use Mshapovalov\Normalizer\Exception\ThereIsMoreChangesThanConvertorsException;
 use Mshapovalov\Normalizer\Exception\ThereIsNoConfigurationForAliasException;
 use Mshapovalov\Normalizer\Exception\ThereIsNoConfigurationForTypeException;
 
@@ -22,11 +24,22 @@ class Normalizer implements NormalizerInterface
     /** @var NormalizerObserverInterface[] */
     private array $observers = [];
 
-    public function __construct(array $typesConfigurations, array $observers = [])
+    private ObjectStructureChangesTracker $changesTracker;
+
+    private bool $trackChanges;
+
+    public function __construct(
+        ObjectStructureChangesTracker $changesTracker,
+        array $typesConfigurations,
+        bool $trackChanges = false,
+        array $observers = []
+    )
     {
         $this->assertThereAreNoDuplicates($typesConfigurations);
         $this->typesConfigurations = $typesConfigurations;
         $this->observers = $observers;
+        $this->changesTracker = $changesTracker;
+        $this->trackChanges = $trackChanges;
     }
 
     public function normalize(object $object): array
@@ -86,6 +99,12 @@ class Normalizer implements NormalizerInterface
     private function normalizeObject(object $object): array
     {
         $configuration = $this->getConfigurationByType(get_class($object));
+        if ($this->trackChanges) {
+            $this->changesTracker->trackChanges($configuration->getType(), $configuration->getAlias());
+            if (false === $this->changesTracker->isDataStructureVersionCorrect($configuration->getAlias(), $configuration->getDataStructureVersion())) {
+                throw new ThereIsMoreChangesThanConvertorsException($configuration->getType());
+            }
+        }
         $result = [];
         if ($configuration->hasCustomNormalizer()) {
             $result = $configuration->normalize($object);

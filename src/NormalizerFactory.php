@@ -4,11 +4,26 @@ declare(strict_types=1);
 namespace Mshapovalov\Normalizer;
 
 
+use Mshapovalov\Normalizer\ChangesTracker\ChangesStorage\ChangesStorageInterface;
+use Mshapovalov\Normalizer\ChangesTracker\ObjectStructureChangesTracker;
+
 class NormalizerFactory implements NormalizerFactoryInterface
 {
 
-    public function createNormalizer(array $typesConfiguration, array $observers = []): NormalizerInterface
+    private ChangesStorageInterface $changesStorage;
+
+    public function __construct(ChangesStorageInterface $changesStorage)
     {
-        return new Normalizer($typesConfiguration, $observers);
+        $this->changesStorage = $changesStorage;
+    }
+
+    public function createNormalizer(array $typesConfiguration, array $observers = [], bool $trackChanges = false): NormalizerInterface
+    {
+        return new Normalizer(
+            new ObjectStructureChangesTracker($this->changesStorage),
+            $typesConfiguration,
+            $trackChanges,
+            $observers
+        );
     }
 }
