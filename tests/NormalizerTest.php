@@ -100,7 +100,8 @@ class NormalizerTest extends TestCase
                     }
                 )
             ],
-            [$observer]
+            [$observer],
+            true
         );
 
         $car = new Car('Skoda', new Engine('gasoline', 2.5));
@@ -207,24 +208,28 @@ class NormalizerTest extends TestCase
 
     public function testItConvertsData(): void
     {
-        $normalizer = $this->factory->createNormalizer([
-            new TypeConfiguration(
-                'engine',
-                Engine::class,
-                [
-                    function (array $data) {
-                        $data['legacy_volume_1'] = $data['legacy_volume_0'];
-                        unset($data['legacy_volume_0']);
-                        return $data;
-                    },
-                    function (array $data) {
-                        $data['volume'] = $data['legacy_volume_1'];
-                        unset($data['legacy_volume_1']);
-                        return $data;
-                    }
-                ],
-            )
-        ]);
+        $normalizer = $this->factory->createNormalizer(
+            [
+                new TypeConfiguration(
+                    'engine',
+                    Engine::class,
+                    [
+                        function (array $data) {
+                            $data['legacy_volume_1'] = $data['legacy_volume_0'];
+                            unset($data['legacy_volume_0']);
+                            return $data;
+                        },
+                        function (array $data) {
+                            $data['volume'] = $data['legacy_volume_1'];
+                            unset($data['legacy_volume_1']);
+                            return $data;
+                        }
+                    ],
+                )
+            ],
+            [],
+            true
+        );
         $expectedDenormalized = new Engine('diesel', 5);
 
         $actualDenormalized = $normalizer->denormalize(
