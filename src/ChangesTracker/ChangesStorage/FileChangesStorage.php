@@ -20,8 +20,10 @@ class FileChangesStorage implements ChangesStorageInterface
 
     public function save(string $typeAlias, array $changes): void
     {
-        file_put_contents($this->definePath($typeAlias), json_encode($changes, JSON_PRETTY_PRINT));
-        $this->cache[$typeAlias] = $changes;
+        $actualChanges = $this->load($typeAlias);
+        $actualChanges[] = $changes;
+        file_put_contents($this->definePath($typeAlias), json_encode($actualChanges, JSON_PRETTY_PRINT));
+        $this->cache[$typeAlias] = $actualChanges;
     }
 
     public function load(string $typeAlias): array
@@ -45,5 +47,4 @@ class FileChangesStorage implements ChangesStorageInterface
         }
         return json_decode(file_get_contents($path), true);
     }
-
 }
